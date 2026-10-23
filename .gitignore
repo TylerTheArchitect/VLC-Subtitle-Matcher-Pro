@@ -10,3 +10,6 @@ __pycache__/
 # Operating System junk
 .DS_Store
 Thumbs.db
+
+#Environment variables / Secrets
+.env

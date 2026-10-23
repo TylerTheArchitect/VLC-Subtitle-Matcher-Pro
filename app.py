@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from core import rename_subtitles, preview_renames, scan_folder
+from core import rename_subtitles, preview_renames, scan_folder, download_online_subtitles
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -9,8 +9,8 @@ class SubtitleMatcherApp:
     def __init__(self, root):
         self.root = root
         self.root.title("VLC Subtitle Matcher Pro")
-        self.root.geometry("700x560")
-        self.root.minsize(650, 500)
+        self.root.geometry("720x620")
+        self.root.minsize(650, 550)
         
         self.video_paths = []
         self.subtitle_paths = []
@@ -48,7 +48,7 @@ class SubtitleMatcherApp:
         header_label = ctk.CTkLabel(main_frame, text="Batch Subtitle Renamer & Matcher", font=ctk.CTkFont(size=16, weight="bold"))
         header_label.grid(row=0, column=0, sticky="w", pady=(0, 10))
 
-        # --- Folder Selection Card (All-in-one Auto-Scan) ---
+        # --- Folder Selection Card (Auto-Scan) ---
         folder_card = ctk.CTkFrame(main_frame, corner_radius=10)
         folder_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         folder_card.grid_columnconfigure(0, weight=1)
@@ -79,23 +79,29 @@ class SubtitleMatcherApp:
         action_frame.grid(row=4, column=0, sticky="nsew")
         action_frame.grid_columnconfigure(0, weight=1)
         action_frame.grid_columnconfigure(1, weight=1)
-        action_frame.grid_rowconfigure(1, weight=1)
+        action_frame.grid_rowconfigure(2, weight=1)
 
         # Preview Button
         preview_btn = ctk.CTkButton(action_frame, text="Preview Changes", command=self.run_preview,
                                      font=ctk.CTkFont(size=12, weight="bold"), height=35,
                                      fg_color="#f0ad4e", hover_color="#ec971f", text_color="black")
-        preview_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5), pady=(0, 10))
+        preview_btn.grid(row=0, column=0, sticky="ew", padx=(0, 5), pady=(0, 8))
 
-        # Run Renamer Button
+        # Execute Rename Button
         self.run_btn = ctk.CTkButton(action_frame, text="Execute Rename", command=self.run_renamer,
                                      font=ctk.CTkFont(size=12, weight="bold"), height=35, 
                                      fg_color="#2fa572", hover_color="#248259")
-        self.run_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=(0, 10))
+        self.run_btn.grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=(0, 8))
+
+        # Fetch Online Subtitles Button
+        online_btn = ctk.CTkButton(action_frame, text="Fetch Online Subtitles", command=self.run_online_download,
+                                    font=ctk.CTkFont(size=12, weight="bold"), height=35,
+                                    fg_color="#3b5998", hover_color="#2d4373")
+        online_btn.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
         # Modern Log Box
         self.log_text = ctk.CTkTextbox(action_frame, corner_radius=8, font=("Consolas", 11))
-        self.log_text.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        self.log_text.grid(row=2, column=0, columnspan=2, sticky="nsew")
 
     def load_folder(self):
         folder = filedialog.askdirectory(title="Select Media Folder")
@@ -156,6 +162,18 @@ class SubtitleMatcherApp:
         for res in results:
             self.log_message(res)
         self.log_message("--- Process Completed ---\n")
+
+    def run_online_download(self):
+        if not self.video_paths:
+            messagebox.showerror("Error", "Please select or scan video files first before fetching subtitles online!")
+            return
+            
+        self.log_message("\n--- Connecting to OpenSubtitles API ---")
+        results = download_online_subtitles(self.video_paths)
+        
+        for res in results:
+            self.log_message(res)
+        self.log_message("--- Online Download Finished ---\n")
 
     def reset_app(self):
         self.video_paths = []

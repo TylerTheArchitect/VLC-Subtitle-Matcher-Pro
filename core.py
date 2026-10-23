@@ -1,10 +1,20 @@
 import re
 from pathlib import Path
+import requests
+from dotenv import load_dotenv
+import os
+
+# Load variables from the local .env file
+load_dotenv()
 
 # Supported file extensions for validation
 VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.avi', '.mov', '.m4v', '.flv', '.webm'}
 SUBTITLE_EXTENSIONS = {'.srt', '.ass', '.sub', '.vtt'}
 
+# OpenSubtitles API Configuration
+
+BASE_URL = "https://api.opensubtitles.com/api/v1/subtitles"
+OPEN_SUBTITLES_API_KEY=os.getenv("OPEN_SUBTITLES_API_KEY", "")
 def natural_sort_key(path):
     """
     Splits filename into text and numeric parts so '10' is evaluated 
@@ -67,34 +77,110 @@ def rename_subtitles(video_paths, subtitle_paths):
     
     for video, subtitle in zip(videos, subtitles):
         try:
-            if not subtitle.exists() or not video.exists():
-                results.append(f"Skipped: File missing on disk -> {subtitle.name}")
+            sub_path = Path(subtitle)
+            vid_path = Path(video)
+            
+            if not sub_path.exists() or not vid_path.exists():
+                results.append(f"Skipped: File missing on disk -> {sub_path.name}")
                 continue
                 
             # Validate extensions
-            if subtitle.suffix.lower() not in SUBTITLE_EXTENSIONS:
-                results.append(f"Skipped: Invalid subtitle type -> {subtitle.name}")
+            if sub_path.suffix.lower() not in SUBTITLE_EXTENSIONS:
+                results.append(f"Skipped: Invalid subtitle type -> {sub_path.name}")
                 continue
-            if video.suffix.lower() not in VIDEO_EXTENSIONS:
-                results.append(f"Skipped: Invalid video type -> {video.name}")
+            if vid_path.suffix.lower() not in VIDEO_EXTENSIONS:
+                results.append(f"Skipped: Invalid video type -> {vid_path.name}")
                 continue
 
-            new_stem = video.stem
-            sub_extension = subtitle.suffix
-            new_subtitle_path = subtitle.with_name(new_stem + sub_extension)
+            new_stem = vid_path.stem
+            sub_extension = sub_path.suffix
+            new_subtitle_path = sub_path.with_name(new_stem + sub_extension)
             
             # Target collision check
-            if new_subtitle_path.exists() and new_subtitle_path != subtitle:
+            if new_subtitle_path.exists() and new_subtitle_path != sub_path:
                 results.append(f"Skipped: Target file already exists -> {new_subtitle_path.name}")
                 continue
                 
-            subtitle.rename(new_subtitle_path)
-            results.append(f"Success: {subtitle.name} -> {new_subtitle_path.name}")
+            sub_path.rename(new_subtitle_path)
+            results.append(f"Success: {sub_path.name} -> {new_subtitle_path.name}")
             
         except PermissionError:
-            results.append(f"Permission Error: '{subtitle.name}' is open in another app (like VLC).")
+            results.append(f"Permission Error: '{Path(subtitle).name}' is open in another app (like VLC).")
         except Exception as e:
-            results.append(f"Error on {subtitle.name}: {str(e)}")
+            results.append(f"Error on {Path(subtitle).name}: {str(e)}")
             
     results.append("Batch process finished.")
+    return results
+
+def download_online_subtitles(video_paths, language="en"):
+    """
+    Takes a list of video paths, extracts titles, queries OpenSubtitles API,
+    and downloads matching subtitle files directly into the video directory.
+    """
+    if not video_paths:
+        return ["Error: No video files provided for online search."]
+        
+    if OPEN_SUBTITLES_API_KEY == "YOUR_API_KEY_HERE":
+        return ["Error: Please insert your OpenSubtitles API key in core.py to fetch subtitles online."]
+
+    results = ["Starting online subtitle search..."]
+    
+    headers = {
+        "Api-Key": OPEN_SUBTITLES_API_KEY,
+        "User-Agent": "VLCSubtitleMatcherPro v1.0"
+    }
+
+    for v_path in video_paths:
+        video = Path(v_path)
+        if not video.exists():
+            continue
+            
+        query_title = video.stem.replace(".", " ").replace("_", " ")
+        results.append(f"Searching online for: '{query_title}'...")
+
+        params = {
+            "query": query_title,
+            "languages": language
+        }
+
+        try:
+            response = requests.get(BASE_URL, headers=headers, params=params)
+            
+            if response.status_code == 401:
+                results.append("API Error: Unauthorized. Check your OpenSubtitles API Key.")
+                break
+            elif response.status_code != 200:
+                results.append(f"API Error: Server returned status code {response.status_code}")
+                continue
+
+            data = response.json().get("data", [])
+            
+            if not data:
+                results.append(f"No subtitles found online for: {video.name}")
+                continue
+
+            file_id = data[0]["attributes"]["files"][0]["file_id"]
+            
+            download_endpoint = "https://api.opensubtitles.com/api/v1/download"
+            dl_response = requests.post(download_endpoint, headers=headers, json={"file_id": file_id})
+            
+            if dl_response.status_code == 200:
+                dl_data = dl_response.json()
+                link = dl_data.get("link")
+                file_name = dl_data.get("file_name", video.stem + ".srt")
+                
+                sub_content = requests.get(link)
+                target_sub_path = video.with_name(video.stem + Path(file_name).suffix)
+                
+                with open(target_sub_path, "wb") as f:
+                    f.write(sub_content.content)
+                    
+                results.append(f"Successfully downloaded: {target_sub_path.name}")
+            else:
+                results.append(f"Failed to retrieve download link for {video.name}")
+
+        except Exception as e:
+            results.append(f"Network/API Error for {video.name}: {str(e)}")
+
+    results.append("Online subtitle search completed.")
     return results
