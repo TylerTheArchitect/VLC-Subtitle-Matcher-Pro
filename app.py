@@ -107,15 +107,24 @@ class SubtitleMatcherApp:
 
     def run_renamer(self):
         if not self.video_paths or not self.subtitle_paths:
-            messagebox.showerror("Error", "Please select both video and subtitle files before running!")
+            messagebox.showerror("Selection Error", "Please select both video and subtitle files before running!")
             return
             
+        # Call core logic function
         results = rename_subtitles(self.video_paths, self.subtitle_paths)
         
+        # If the core engine returns a critical error message (like count mismatch), pop up an alert
+        if results and results[0].startswith("Error:"):
+            messagebox.showerror("Batch Error", results[0])
+            self.log_message(f"\n[ERROR] {results[0]}")
+            return
+        
+        # Otherwise, stream log results normally
         self.log_message("\n--- Starting Rename Process ---")
         for res in results:
             self.log_message(res)
         self.log_message("--- Process Completed ---\n")
+
 
     def log_message(self, message):
         self.log_text.insert("end", message + "\n")
