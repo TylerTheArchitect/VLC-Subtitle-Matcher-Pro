@@ -1,16 +1,19 @@
-# Byte-compiled / optimized / DLL files
+# Python bytecode & caches
 __pycache__/
 *.py[cod]
 *$py.class
 
-# IDE specific files
-.vscode/
-.idea/
+# PyInstaller build files
+build/
+dist/
+*.spec
 
-# Operating System junk
-.DS_Store
-Thumbs.db
-
-#Environment variables / Secrets
+# Environment variables and local configs
 .env
 config.json
+
+# IDEs & OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
