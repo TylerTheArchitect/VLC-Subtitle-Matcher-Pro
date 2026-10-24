@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from core import rename_subtitles, preview_renames, scan_folder, download_online_subtitles
+from core import rename_subtitles, preview_renames, scan_folder, download_online_subtitles, save_api_key, load_api_key
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -21,17 +21,41 @@ class SubtitleMatcherApp:
         self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
 
-        # --- Sidebar ---
-        sidebar_frame = ctk.CTkFrame(self.root, width=180, corner_radius=0)
+               # --- Sidebar ---
+        sidebar_frame = ctk.CTkFrame(self.root, width=200, corner_radius=0)
         sidebar_frame.grid(row=0, column=0, sticky="nsew")
         sidebar_frame.grid_rowconfigure(5, weight=1)
 
         logo_label = ctk.CTkLabel(sidebar_frame, text="Subtitle\nMatcher Pro", font=ctk.CTkFont(size=18, weight="bold"))
-        logo_label.grid(row=0, column=0, padx=20, pady=(25, 15))
+        logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
 
-        # Reset Button in Sidebar
+        # Reset Button
         reset_btn = ctk.CTkButton(sidebar_frame, text="Reset All", fg_color="#d9534f", hover_color="#c9302c", command=self.reset_app)
-        reset_btn.grid(row=1, column=0, padx=15, pady=10, sticky="ew")
+        reset_btn.grid(row=1, column=0, padx=15, pady=5, sticky="ew")
+
+        # API Key Section in Sidebar
+        api_frame = ctk.CTkFrame(sidebar_frame, fg_color="transparent")
+        api_frame.grid(row=2, column=0, padx=10, pady=15, sticky="ew")
+        
+        api_title = ctk.CTkLabel(api_frame, text="OpenSubtitles API Key:", font=ctk.CTkFont(size=11, weight="bold"))
+        api_title.pack(anchor="w", padx=5, pady=(0, 2))
+        
+        self.api_entry = ctk.CTkEntry(api_frame, placeholder_text="Enter API Key", show="*", font=ctk.CTkFont(size=11), height=28)
+        self.api_entry.pack(fill="x", padx=5, pady=(0, 5))
+        
+        # Pre-load existing key if available
+        saved_key = load_api_key()
+        if saved_key:
+            self.api_entry.insert(0, saved_key)
+            
+        save_key_btn = ctk.CTkButton(api_frame, text="Save Key", command=self.save_key_action, height=26, font=ctk.CTkFont(size=11), fg_color="#1f538d")
+        save_key_btn.pack(fill="x", padx=5)
+
+        # Theme Selector at bottom of sidebar
+        self.appearance_mode_menu = ctk.CTkOptionMenu(sidebar_frame, values=["Dark", "Light", "System"],
+                                                       command=lambda m: ctk.set_appearance_mode(m))
+        self.appearance_mode_menu.grid(row=6, column=0, padx=15, pady=20, sticky="s")
+        self.appearance_mode_menu.set("Dark")
 
         # Theme Selector
         self.appearance_mode_menu = ctk.CTkOptionMenu(sidebar_frame, values=["Dark", "Light", "System"],
@@ -173,7 +197,8 @@ class SubtitleMatcherApp:
         
         for res in results:
             self.log_message(res)
-        self.log_message("--- Online Download Finished ---\n")
+        self.log_message("--- Online Process Completed ---\n")
+
 
     def reset_app(self):
         self.video_paths = []
@@ -188,7 +213,21 @@ class SubtitleMatcherApp:
         self.log_text.insert("end", message + "\n")
         self.log_text.see("end")
 
+    def save_key_action(self):
+        key = self.api_entry.get()
+        if key:
+            success = save_api_key(key)
+            if success:
+                messagebox.showinfo("Success", "API Key saved securely to local config!")
+                self.log_message("API Key updated and saved locally.")
+            else:
+                messagebox.showerror("Error", "Failed to save API key.")
+        else:
+            messagebox.showerror("Error", "API Key field cannot be empty.")
+
+
 if __name__ == "__main__":
     root = ctk.CTk()
     app = SubtitleMatcherApp(root)
     root.mainloop()
+

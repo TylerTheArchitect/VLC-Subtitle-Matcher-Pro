@@ -13,3 +13,4 @@ Thumbs.db
 
 #Environment variables / Secrets
 .env
+config.json
