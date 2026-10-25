@@ -28,11 +28,11 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "VLC Subtitle Matcher Pro" --icon=icon.ico --collect-all customtkinter app.py
+          pyinstaller --noconfirm --onefile --windowed --name "VLCSubtitleMatcherPro" --icon=icon.ico --collect-all customtkinter app.py
 
       - name: Create GitHub Release and Upload Binary
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/app.exe
+          files: dist/VLCSubtitleMatcherPro.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
