@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 import os
 import json
+import concurrent.futures
 
 # Load variables from the local .env file if present
 load_dotenv()
@@ -138,10 +139,64 @@ def rename_subtitles(video_paths, subtitle_paths):
     results.append("Batch process finished.")
     return results
 
-def download_online_subtitles(video_paths, language="en"):
+def process_single_video(v_path, headers, language):
+    """Worker function to process and download a single video's subtitle."""
+    video = Path(v_path)
+    if not video.exists():
+        return f"Skipped: File missing on disk -> {video.name}", False
+        
+    query_title = video.stem.replace(".", " ").replace("_", " ")
+    params = {
+        "query": query_title,
+        "languages": language
+    }
+
+    try:
+        response = requests.get(BASE_URL, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 401:
+            return "API Error: Unauthorized. Check your OpenSubtitles API Key.", False
+        elif response.status_code != 200:
+            return f"API Error for {video.name}: Status code {response.status_code}", False
+
+        data = response.json().get("data", [])
+        
+        if not data:
+            return f"No subtitles found online for: {video.name}", False
+
+        file_id = data[0]["attributes"]["files"][0]["file_id"]
+        
+        download_endpoint = "https://api.opensubtitles.com/api/v1/download"
+        dl_response = requests.post(download_endpoint, headers=headers, json={"file_id": file_id}, timeout=10)
+        
+        if dl_response.status_code == 200:
+            dl_data = dl_response.json()
+            link = dl_data.get("link")
+            file_name = dl_data.get("file_name", video.stem + ".srt")
+            
+            sub_content = requests.get(link, timeout=10)
+            target_sub_path = video.with_name(video.stem + Path(file_name).suffix)
+            
+            with open(target_sub_path, "wb") as f:
+                f.write(sub_content.content)
+                
+            return f"Successfully downloaded: {target_sub_path.name}", True
+        else:
+            return f"Failed to retrieve download link for {video.name}", False
+
+    except requests.exceptions.SSLError:
+        return f"SSL Error for '{video.name}': Secure connection dropped.", False
+    except requests.exceptions.ConnectionError:
+        return f"Connection Error for '{video.name}': Could not reach server.", False
+    except requests.exceptions.Timeout:
+        return f"Timeout Error for '{video.name}': Request timed out.", False
+    except Exception as e:
+        return f"Network/API Error for {video.name}: {str(e)}", False
+
+def download_online_subtitles(video_paths, language="en", log_callback=None):
     """
-    Takes video paths, queries OpenSubtitles API using the dynamically loaded key,
-    and downloads matching subtitles with accurate success/failure tracking.
+    Downloads subtitles concurrently across multiple worker threads 
+    using ThreadPoolExecutor for lightning-fast batch processing.
     """
     if not video_paths:
         return ["Error: No video files provided for online search."]
@@ -150,83 +205,39 @@ def download_online_subtitles(video_paths, language="en"):
     if not api_key or api_key == "YOUR_API_KEY_HERE":
         return ["Error: No API key found. Please enter and save your OpenSubtitles API key in the app sidebar."]
 
-    results = ["Starting online subtitle search..."]
-    
     headers = {
         "Api-Key": api_key,
         "User-Agent": "VLCSubtitleMatcherPro v1.0"
     }
 
+    results = ["Starting concurrent online subtitle search..."]
+    if log_callback:
+        log_callback("Starting concurrent online subtitle search...")
+
     success_count = 0
     fail_count = 0
 
-    for v_path in video_paths:
-        video = Path(v_path)
-        if not video.exists():
-            fail_count += 1
-            continue
-            
-        query_title = video.stem.replace(".", " ").replace("_", " ")
-        results.append(f"Searching online for: '{query_title}'...")
-
-        params = {
-            "query": query_title,
-            "languages": language
+    # Use ThreadPoolExecutor to run up to 5 downloads in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Submit all tasks to the thread pool
+        future_to_video = {
+            executor.submit(process_single_video, v_path, headers, language): v_path 
+            for v_path in video_paths
         }
-
-        try:
-            response = requests.get(BASE_URL, headers=headers, params=params, timeout=10)
+        
+        # As each thread completes, grab its result
+        for future in concurrent.futures.as_completed(future_to_video):
+            msg, success = future.result()
+            results.append(msg)
             
-            if response.status_code == 401:
-                results.append("API Error: Unauthorized. Check if your OpenSubtitles API Key is valid.")
-                fail_count += 1
-                break
-            elif response.status_code != 200:
-                results.append(f"API Error: Server returned status code {response.status_code}")
-                fail_count += 1
-                continue
-
-            data = response.json().get("data", [])
-            
-            if not data:
-                results.append(f"No subtitles found online for: {video.name}")
-                fail_count += 1
-                continue
-
-            file_id = data[0]["attributes"]["files"][0]["file_id"]
-            
-            download_endpoint = "https://api.opensubtitles.com/api/v1/download"
-            dl_response = requests.post(download_endpoint, headers=headers, json={"file_id": file_id}, timeout=10)
-            
-            if dl_response.status_code == 200:
-                dl_data = dl_response.json()
-                link = dl_data.get("link")
-                file_name = dl_data.get("file_name", video.stem + ".srt")
+            if log_callback:
+                log_callback(msg)
                 
-                sub_content = requests.get(link, timeout=10)
-                target_sub_path = video.with_name(video.stem + Path(file_name).suffix)
-                
-                with open(target_sub_path, "wb") as f:
-                    f.write(sub_content.content)
-                    
-                results.append(f"Successfully downloaded: {target_sub_path.name}")
+            if success:
                 success_count += 1
             else:
-                results.append(f"Failed to retrieve download link for {video.name}")
                 fail_count += 1
 
-        except requests.exceptions.SSLError:
-            results.append(f"SSL Error for '{video.name}': Secure connection dropped.")
-            fail_count += 1
-        except requests.exceptions.ConnectionError:
-            results.append(f"Connection Error: Could not reach OpenSubtitles server. Check your network.")
-            fail_count += 1
-        except requests.exceptions.Timeout:
-            results.append(f"Timeout Error: Request timed out for {video.name}.")
-            fail_count += 1
-        except Exception as e:
-            results.append(f"Network/API Error for {video.name}: {str(e)}")
-            fail_count += 1
-
-    results.append(f"Online search complete. Downloaded: {success_count}, Failed/Skipped: {fail_count}.")
+    summary = f"Online search complete. Downloaded: {success_count}, Failed/Skipped: {fail_count}."
+    results.append(summary)
     return results

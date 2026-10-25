@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import threading
 from tkinter import filedialog, messagebox
 from core import rename_subtitles, preview_renames, scan_folder, download_online_subtitles, save_api_key, load_api_key
 
@@ -192,12 +193,21 @@ class SubtitleMatcherApp:
             messagebox.showerror("Error", "Please select or scan video files first before fetching subtitles online!")
             return
             
-        self.log_message("\n--- Connecting to OpenSubtitles API ---")
-        results = download_online_subtitles(self.video_paths)
+        self.log_message("\n--- Connecting to OpenSubtitles API (Concurrent) ---")
         
-        for res in results:
-            self.log_message(res)
-        self.log_message("--- Online Process Completed ---\n")
+        # Thread-safe callback to stream messages from background threads to the UI
+        def thread_safe_log(msg):
+            self.root.after(0, lambda: self.log_message(msg))
+
+        def background_worker():
+            # Run the concurrent download engine in the background thread
+            download_online_subtitles(self.video_paths, log_callback=thread_safe_log)
+            
+            # Post completion log on the main GUI thread
+            self.root.after(0, lambda: self.log_message("--- Online Process Completed ---\n"))
+
+        # Launch worker thread so the GUI never freezes
+        threading.Thread(target=background_worker, daemon=True).start()
 
 
     def reset_app(self):
