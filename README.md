@@ -23,6 +23,13 @@ A packaged Windows executable is available in [Releases](../../releases). Downlo
 - Python 3.9 or later
 - An OpenSubtitles API key for online subtitle downloads
 
+### Get an OpenSubtitles API key
+
+1. Create a free account at [OpenSubtitles.com](https://www.opensubtitles.com/).
+2. Open your account settings and go to **API Consumers**.
+3. Click **New Consumer** to generate an API key.
+4. Paste the key into the app and click **Save**.
+
 ### Setup
 
 1. Clone the repository and open its directory:

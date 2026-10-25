@@ -1,4 +1,5 @@
 import threading
+import webbrowser
 import customtkinter as ctk
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -48,6 +49,17 @@ class SubtitleMatcherApp:
         
         self.save_key_btn = ctk.CTkButton(api_frame, text="Save Key", command=self.save_key_action, height=26, font=ctk.CTkFont(size=11), fg_color="#1f538d")
         self.save_key_btn.pack(fill="x", padx=5)
+
+        # --- Low-Key Help Link for Non-Tech Users ---
+        self.help_label = ctk.CTkLabel(
+            api_frame, 
+            text="Get a free API key here", 
+            font=ctk.CTkFont(size=10, underline=True), 
+            text_color="#1f6aa5",
+            cursor="hand2"
+        )
+        self.help_label.pack(anchor="w", padx=5, pady=(6, 0))
+        self.help_label.bind("<Button-1>", lambda e: self.open_api_help())
 
         # Theme Selector
         self.appearance_mode_menu = ctk.CTkOptionMenu(sidebar_frame, values=["Dark", "Light", "System"],
@@ -116,7 +128,6 @@ class SubtitleMatcherApp:
         self.log_text.grid(row=2, column=0, columnspan=2, sticky="nsew")
 
     def load_initial_state(self):
-        # Automatically load API key from config.json or .env fallback
         api_key = load_api_key()
         if api_key and api_key != "YOUR_API_KEY_HERE":
             self.api_entry.insert(0, api_key)
@@ -214,6 +225,21 @@ class SubtitleMatcherApp:
             messagebox.showerror("Error", "Please select or scan video files first before fetching subtitles online!")
             return
             
+        # --- API Key Guard Check & Auto-Save Feature ---
+        current_input_key = self.api_entry.get().strip()
+        saved_key = load_api_key()
+        
+        if not current_input_key and (not saved_key or saved_key == "YOUR_API_KEY_HERE"):
+            messagebox.showerror("API Key Missing", "Please enter your OpenSubtitles API key first!")
+            self.log_message("Error: OpenSubtitles API key is missing. Please enter and save your key.")
+            return
+            
+        # If they typed a key into the box but forgot to click "Save", auto-save it smoothly!
+        if current_input_key and current_input_key != saved_key:
+            save_config(api_key=current_input_key)
+            self.log_message("Auto-saved API key from input field.")
+        # -----------------------------------------------
+
         self.set_ui_busy(True)
         self.log_message("\n--- Connecting to OpenSubtitles API (Concurrent) ---")
         
@@ -230,7 +256,7 @@ class SubtitleMatcherApp:
         threading.Thread(target=background_worker, daemon=True).start()
 
     def save_key_action(self):
-        key = self.api_entry.get()
+        key = self.api_entry.get().strip()
         if key:
             success = save_config(api_key=key)
             if success:
@@ -249,6 +275,9 @@ class SubtitleMatcherApp:
         self.sub_status_label.configure(text="Subtitles: 0 selected", text_color="gray")
         self.log_text.delete("0.1", "end")
         self.log_message("Application reset successfully.")
+
+    def open_api_help(self):
+        webbrowser.open("https://www.opensubtitles.com")
 
     def log_message(self, message):
         self.log_text.insert("end", message + "\n")
