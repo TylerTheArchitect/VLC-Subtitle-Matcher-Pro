@@ -25,7 +25,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm -- icon.ico --onefile --windowed --collect-all customtkinter app.py
+          pyinstaller --noconfirm --icon=icon.ico --onefile --windowed --collect-all customtkinter app.py
 
       - name: Create GitHub Release and Upload Binary
         uses: softprops/action-gh-release@v2
