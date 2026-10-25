@@ -17,3 +17,6 @@ config.json
 .idea/
 .DS_Store
 Thumbs.db
+
+#Logs
+app.log
