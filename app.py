@@ -236,8 +236,11 @@ class SubtitleMatcherApp:
             
         # If they typed a key into the box but forgot to click "Save", auto-save it smoothly!
         if current_input_key and current_input_key != saved_key:
-            save_config(api_key=current_input_key)
-            self.log_message("Auto-saved API key from input field.")
+            if not save_config(api_key=current_input_key):
+                messagebox.showerror("Keyring Error", "Could not save the API key to your system keyring.")
+                self.log_message("Error: Could not save API key to the system keyring.")
+                return
+            self.log_message("Auto-saved API key to the system keyring.")
         # -----------------------------------------------
 
         self.set_ui_busy(True)
@@ -260,10 +263,10 @@ class SubtitleMatcherApp:
         if key:
             success = save_config(api_key=key)
             if success:
-                messagebox.showinfo("Success", "API Key saved securely to local config!")
-                self.log_message("API Key updated and saved locally.")
+                messagebox.showinfo("Success", "API key saved to your system keyring.")
+                self.log_message("API key updated in the system keyring.")
             else:
-                messagebox.showerror("Error", "Failed to save API key.")
+                messagebox.showerror("Keyring Error", "Failed to save API key to your system keyring.")
         else:
             messagebox.showerror("Error", "API Key field cannot be empty.")
 

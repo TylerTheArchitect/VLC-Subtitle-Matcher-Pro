@@ -49,7 +49,7 @@ A packaged Windows executable is available in [Releases](../../releases). Downlo
 3. Install dependencies:
 
     ```powershell
-    pip install customtkinter requests python-dotenv certifi urllib3
+    pip install customtkinter requests python-dotenv certifi urllib3 keyring
     ```
 
 4. Configure your API key using either the application's API key field or a local `.env` file:
@@ -67,7 +67,8 @@ A packaged Windows executable is available in [Releases](../../releases). Downlo
 ## Security
 
 - Treat your OpenSubtitles API key as a password. Do not put real keys in source files, screenshots, issues, or commits.
-- The application stores a key entered in the GUI as plaintext in `config.json`; protect access to your computer and do not share this file.
+- API keys entered in the GUI are stored in the operating system's keyring. `config.json` stores application settings such as the last folder, not the API key.
+- Existing API keys in `config.json` are migrated to the OS keyring when the app loads them.
 - Keep `.env` and `config.json` out of version control. They are listed in `.gitignore`, but ignore rules do not remove files that have already been committed.
 - Before committing, review `git status` and `git diff` and verify that no secrets or personal files are included.
 - If a key is exposed or committed, revoke it with OpenSubtitles, create a replacement, and remove the exposed value from repository history as needed. Deleting the file in a later commit does not erase earlier copies.

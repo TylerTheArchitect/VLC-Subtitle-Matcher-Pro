@@ -4,6 +4,7 @@ import re
 import logging
 from pathlib import Path
 import requests
+import keyring
 from dotenv import load_dotenv
 
 # Load variables from local .env if present
@@ -22,23 +23,38 @@ VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.avi', '.mov', '.m4v', '.flv', '.webm'}
 SUBTITLE_EXTENSIONS = {'.srt', '.ass', '.sub', '.vtt'}
 
 CONFIG_FILE = Path("config.json")
+KEYRING_SERVICE = "VLC Subtitle Matcher Pro"
+KEYRING_USERNAME = "opensubtitles_api_key"
 BASE_URL = "https://api.opensubtitles.com/api/v1/subtitles"
 
 def save_config(api_key=None, last_folder=None):
-    """Saves settings (API key and last folder) to local config.json."""
-    config = {}
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                config = json.load(f)
-        except Exception:
-            pass
-            
+    """Saves API keys to the OS keyring and other settings to config.json."""
+    config = load_config()
+    legacy_key = str(config.get("api_key", "")).strip()
+
     if api_key is not None:
-        config["api_key"] = api_key.strip()
+        try:
+            keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, api_key.strip())
+        except Exception as e:
+            logging.error(f"Failed to save API key to keyring: {e}")
+            return False
+    elif legacy_key:
+        try:
+            if not keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME):
+                keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, legacy_key)
+        except Exception as e:
+            logging.error(f"Failed to migrate API key to keyring: {e}")
+            return False
+
+    if api_key is not None or legacy_key:
+        config.pop("api_key", None)
+
     if last_folder is not None:
         config["last_folder"] = str(last_folder)
-        
+
+    if last_folder is None and api_key is None and not legacy_key:
+        return True
+
     try:
         with open(CONFIG_FILE, "w") as f:
             json.dump(config, f)
@@ -59,16 +75,29 @@ def load_config():
     return {}
 
 def load_api_key():
-    """Loads API key from config.json first, falling back to .env / system environment variables."""
-    if CONFIG_FILE.exists():
+    """Loads the API key from the OS keyring, migrating legacy config values."""
+    key = ""
+    try:
+        key = (keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME) or "").strip()
+    except Exception as e:
+        logging.warning(f"Failed to read API key from keyring: {e}")
+
+    config = load_config()
+    legacy_key = str(config.get("api_key", "")).strip()
+    if legacy_key:
         try:
-            with open(CONFIG_FILE, "r") as f:
-                config = json.load(f)
-                key = config.get("api_key", "").strip()
-                if key:
-                    return key
-        except Exception:
-            pass
+            if not key:
+                keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, legacy_key)
+                key = legacy_key
+            config.pop("api_key", None)
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(config, f)
+            logging.info("Migrated API key from config.json to the OS keyring.")
+        except Exception as e:
+            logging.error(f"Failed to migrate API key to keyring: {e}")
+
+    if key:
+        return key
     return os.getenv("OPEN_SUBTITLES_API_KEY", "").strip()
 
 

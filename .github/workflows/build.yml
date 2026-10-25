@@ -24,11 +24,11 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install customtkinter requests python-dotenv certifi urllib3 pyinstaller
+          pip install customtkinter requests python-dotenv certifi urllib3 keyring pyinstaller
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "VLCSubtitleMatcherPro" --icon=icon.ico --collect-all customtkinter app.py
+          pyinstaller --noconfirm --onefile --windowed --name "VLCSubtitleMatcherPro" --icon=icon.ico --collect-all customtkinter --collect-all keyring --copy-metadata keyring app.py
 
       - name: Create GitHub Release and Upload Binary
         uses: softprops/action-gh-release@v2
